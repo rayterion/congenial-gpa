@@ -413,6 +413,7 @@ def before_scenario(context, _scenario):
 
 def after_scenario(context, _scenario):
     stop_cli_process(context)
+    join_cli_reader_thread(context)
 
 
 def after_all(context):
@@ -449,3 +450,11 @@ def terminate_process(process):
     except subprocess.TimeoutExpired:
         process.kill()
         process.wait(timeout=2)
+
+
+def join_cli_reader_thread(context):
+    thread = getattr(context, "cli_reader_thread", None)
+    if thread is None:
+        return
+
+    thread.join(timeout=2)

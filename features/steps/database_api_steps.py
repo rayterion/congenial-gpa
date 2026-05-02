@@ -156,11 +156,11 @@ def step_commands_section_includes_exit(context):
 
 @then("the commands section should include all available database operations")
 def step_commands_section_includes_all_operations(context):
-    output = assert_commands_section_is_visible(context, recent=True)
-    missing_commands = [
-        command for command in AVAILABLE_COMMANDS if command not in output
-    ]
-    assert not missing_commands, f"Missing commands from help output: {missing_commands}"
+    wait_for_recent_cli_output(
+        context,
+        "all available database operations",
+        lambda output: all(command in output for command in AVAILABLE_COMMANDS),
+    )
 
 
 @then("the CLI should show the commands section")
