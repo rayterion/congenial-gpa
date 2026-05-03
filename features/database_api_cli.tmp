@@ -15,7 +15,6 @@ Feature: Can send database API requests and store values
     | /list_rows        | List all rows in a given table           |
     | /clear_database   | Remove all data from the database        |
     | /help             | Show the commands section                |
-    | /exit             | Close the CLI                            |
 
     
 
@@ -24,10 +23,10 @@ Feature: Can send database API requests and store values
     Then it should launch a welcome page
     And it should contain a commands section
     And the commands section should include all available database operations
+    And it should exit immediately after showing the welcome page
 
   Scenario: Add a cell
-    Given I have launched the database CLI
-    When I run the command "/add_cell users 1 name Martin"
+    When I run the command "db-cli /add_cell value=Martin row=followers column=name table=users"
     Then the CLI should send a create cell request to the database API
     And the database should store "Martin" in table "users", row "1", cell "name"
     And the CLI should show a success message
