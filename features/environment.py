@@ -13,10 +13,13 @@ def before_all(context):
     context.db_api.start()
     context.base_url = context.db_api.get_base_url()
 
+    context.cli_output = ""
+
 def after_all(context):
     context.dev_db.shutdown()
     context.db_api.shutdown()
 
 def after_scenario(context, scenario):
     """Ensure the CLI is closed after each scenario regardless of outcome."""
-    run(["db-cli", "/clear_database", f"--db_api_url={context.base_url}"], capture_output=True, text=True)
+    result =run(["db-cli", "/clear_database", f"--db_api_url={context.base_url}"], capture_output=True, text=True)
+    context.cli_output = result.stdout
