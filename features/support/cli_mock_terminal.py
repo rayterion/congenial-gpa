@@ -1,4 +1,4 @@
-from db_cli import DatabaseCLI
+from apps.db_cli import DatabaseCLI
 
 class CLIMockTerminal:
     def __init__(self):
@@ -7,7 +7,7 @@ class CLIMockTerminal:
     def run_cli_command(self, command):
         """ Run a cli command and return its response. """
         cli = DatabaseCLI(terminal=self)
-        cli.run_command(command)
+        cli.store_cell(command)
     
     def log(self, text):
         """ integrated log for the cli to send output to the terminal. """
