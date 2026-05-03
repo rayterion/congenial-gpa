@@ -55,7 +55,7 @@ def up_dev_db_async():
 
 def down_dev_db():
     """ Stop and remove the dev database stack. """
-    subprocess.run(["docker-compose", "-f", str(COMPOSE_FILE), "down"], check=True)
+    subprocess.run(["docker-compose", "-f", str(COMPOSE_FILE), "down", "-v"], check=True)
     print("Dev database stack stopped and removed.")
 
 if __name__ == "__main__":
