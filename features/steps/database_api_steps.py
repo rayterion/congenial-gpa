@@ -93,13 +93,6 @@ def step_should_contain_commands_section(context):
     )
 
 
-@then("the commands section should include {command}")
-def step_commands_section_includes(context, command):
-    assert command in context.cli_output, (
-        f"Expected '{command}' to appear in CLI output:\n{context.cli_output}"
-    )
-
-
 @then("the CLI should show the commands section")
 def step_show_commands_section(context):
     assert "commands" in context.cli_output.lower(), (
@@ -109,11 +102,7 @@ def step_show_commands_section(context):
 
 @then("the commands section should include all available database operations")
 def step_commands_include_all_operations(context):
-    expected = [
-        "/add_cell", "/get_cell", "/update_cell", "/remove_cell",
-        "/add_row",  "/get_row",  "/update_row",  "/remove_row",
-        "/list_rows", "/clear_database", "/help", "/exit",
-    ]
+    expected = context.commands_list = [row.as_dict() for row in context.table]
     missing = [cmd for cmd in expected if cmd not in context.cli_output]
     assert not missing, (
         f"The following commands were missing from /help output: {missing}\n"

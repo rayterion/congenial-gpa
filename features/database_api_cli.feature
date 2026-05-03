@@ -3,23 +3,27 @@ Feature: Can send database API requests and store values
   Background:
     Given the database API is running
     And the database is empty
+    | command           | description                              |
+    | /add_cell         | Add a value to a specific cell           |
+    | /get_cell         | Retrieve the value of a specific cell    |
+    | /update_cell      | Update the value of a specific cell      |
+    | /remove_cell      | Remove a specific cell                   |
+    | /add_row          | Add a new row with given field values    |
+    | /get_row          | Retrieve all fields of a specific row    |
+    | /update_row       | Update the fields of a specific row      |
+    | /remove_row       | Remove a specific row                    |
+    | /list_rows        | List all rows in a given table           |
+    | /clear_database   | Remove all data from the database        |
+    | /help             | Show the commands section                |
+    | /exit             | Close the CLI                            |
+
+    
 
   Scenario: Launch CLI
     When I run the database CLI
     Then it should launch a welcome page
     And it should contain a commands section
-    And the commands section should include /add_cell
-    And the commands section should include /get_cell
-    And the commands section should include /update_cell
-    And the commands section should include /remove_cell
-    And the commands section should include /add_row
-    And the commands section should include /get_row
-    And the commands section should include /update_row
-    And the commands section should include /remove_row
-    And the commands section should include /list_rows
-    And the commands section should include /clear_database
-    And the commands section should include /help
-    And the commands section should include /exit
+    And the commands section should include all available database operations
 
   Scenario: Add a cell
     Given I have launched the database CLI
