@@ -1,164 +1,162 @@
-"""HTTP REST API server wrapping DatabaseStorage."""
-import json
+"""
+Dynamic Database API using SQLModel + PostgreSQL, served via Flask.
+
+Physical layout per logical table named <table_name>:
+    <table_name>_rows    – row_name  → id
+    <table_name>_columns – col_name  → id
+    <table_name>_cells   – (row_id, col_id, value)
+
+Rows and columns are created on-demand.
+
+Usage:
+    db = DatabaseAPI("postgresql://postgres:postgres@localhost:5432/mydb", port=4040)
+    db.run()   # blocks; or call db.start() to run in a background thread
+"""
+
+from __future__ import annotations
+
 import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from urllib.parse import urlparse
+from typing import Any, Optional
 
-from src.services.database_storage import DatabaseStorage
+from sqlalchemy import text
+from sqlmodel import Field, Session, SQLModel, create_engine, select
+from flask import Flask, request, jsonify
 
+
+# ---------------------------------------------------------------------------
+# Dynamic model factory
+# ---------------------------------------------------------------------------
+
+_MODEL_CACHE: dict[str, tuple] = {}
+
+
+def _make_models(table_name: str):
+    if table_name in _MODEL_CACHE:
+        return _MODEL_CACHE[table_name]
+
+    rows_table  = f"{table_name}_rows"
+    cols_table  = f"{table_name}_columns"
+    cells_table = f"{table_name}_cells"
+
+    class RowDef(SQLModel, table=True):
+        __tablename__  = rows_table
+        __table_args__ = {"extend_existing": True}
+        id:   Optional[int] = Field(default=None, primary_key=True)
+        name: str           = Field(index=True, unique=True)
+
+    class ColDef(SQLModel, table=True):
+        __tablename__  = cols_table
+        __table_args__ = {"extend_existing": True}
+        id:   Optional[int] = Field(default=None, primary_key=True)
+        name: str           = Field(index=True, unique=True)
+
+    class Cell(SQLModel, table=True):
+        __tablename__  = cells_table
+        __table_args__ = {"extend_existing": True}
+        id:     Optional[int] = Field(default=None, primary_key=True)
+        row_id: int           = Field(foreign_key=f"{rows_table}.id", index=True)
+        col_id: int           = Field(foreign_key=f"{cols_table}.id", index=True)
+        value:  Optional[str] = None
+
+    _MODEL_CACHE[table_name] = (RowDef, ColDef, Cell)
+    return RowDef, ColDef, Cell
+
+
+# ---------------------------------------------------------------------------
+# DatabaseAPI
+# ---------------------------------------------------------------------------
 
 class DatabaseAPI:
-    def __init__(self, port: int = 8000, database_url: str = "") -> None:
-        self._port = port
-        self._storage = DatabaseStorage()
-        self._server: HTTPServer | None = None
-        self._thread: threading.Thread | None = None
+    def __init__(self, database_url: str, port: int = 4040, *, echo: bool = False) -> None:
+        self.engine   = create_engine(database_url, echo=echo)
+        self.port     = port
+        self.base_url = f"http://localhost:{port}"
+        self.app      = self._build_app()
+
+    # ------------------------------------------------------------------
+    # Flask app
+    # ------------------------------------------------------------------
+
+    def _build_app(self) -> Flask:
+        app = Flask(__name__)
+
+        @app.post("/<table_name>/<row_name>/<col_name>")
+        def post_cell(table_name: str, row_name: str, col_name: str):
+            body = request.get_json(silent=True) or {}
+            value = body.get("data")
+            if value is None:
+                return jsonify({"error": "Missing 'data' field"}), 400
+
+            self.set_cell(table_name, row_name, col_name, value)
+            return jsonify({"status": "ok"}), 200
+        @app.get("/")
+        def health_check():
+            return "API is healthy", 200
+        return app
+
+    # ------------------------------------------------------------------
+    # Server lifecycle
+    # ------------------------------------------------------------------
+
+    def run(self) -> None:
+        """Start Flask in the current thread (blocks)."""
+        self.app.run(port=self.port)
 
     def start(self) -> None:
-        self._server = _build_server(self._port, self._storage)
-        self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
-        self._thread.start()
+        """Start Flask in a background daemon thread (non-blocking)."""
+        t = threading.Thread(target=lambda: self.app.run(port=self.port), daemon=True)
+        t.start()
 
-    def stop(self) -> None:
-        if self._server:
-            self._server.shutdown()
+    # ------------------------------------------------------------------
+    # Cell logic
+    # ------------------------------------------------------------------
 
-    def get_base_url(self) -> str:
-        return f"http://localhost:{self._port}"
+    def set_cell(self, table_name: str, row_name: str, col_name: str, value: Any) -> None:
+        """Write value to (row_name, col_name); create table/row/col if needed."""
+        RowDef, ColDef, Cell = _make_models(table_name)
+        self._ensure_tables(RowDef, ColDef, Cell)
 
+        with Session(self.engine) as session:
+            row  = self._upsert_name(session, RowDef, row_name)
+            col  = self._upsert_name(session, ColDef, col_name)
+            cell = session.exec(
+                select(Cell).where(Cell.row_id == row.id, Cell.col_id == col.id)
+            ).first()
 
-# ──────────────────────────────────────────────────────────────────────────────
-# HTTP server plumbing
-# ──────────────────────────────────────────────────────────────────────────────
+            if cell is None:
+                session.add(Cell(row_id=row.id, col_id=col.id, value=str(value)))
+            else:
+                cell.value = str(value)
+                session.add(cell)
 
-def _build_server(port: int, storage: DatabaseStorage) -> HTTPServer:
-    handler_class = _make_handler_class(storage)
-    return HTTPServer(("localhost", port), handler_class)
+            session.commit()
 
+    # ------------------------------------------------------------------
+    # Internals
+    # ------------------------------------------------------------------
 
-def _make_handler_class(storage: DatabaseStorage):
-    class _Handler(BaseHTTPRequestHandler):
-        def do_GET(self):
-            _handle_get(self, storage)
+    def _ensure_tables(self, RowDef, ColDef, Cell) -> None:
+        SQLModel.metadata.create_all(
+            self.engine,
+            tables=[RowDef.__table__, ColDef.__table__, Cell.__table__],
+        )
 
-        def do_POST(self):
-            _handle_post(self, storage)
-
-        def do_PUT(self):
-            _handle_put(self, storage)
-
-        def do_DELETE(self):
-            _handle_delete(self, storage)
-
-        def log_message(self, fmt, *args):  # silence request logs
-            pass
-
-    return _Handler
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Request dispatchers
-# ──────────────────────────────────────────────────────────────────────────────
-
-def _handle_get(handler, storage: DatabaseStorage) -> None:
-    parts = _path_parts(handler.path)
-
-    if parts == ["health"]:
-        return _send_json(handler, 200, {"status": "ok"})
-
-    if parts == []:
-        return _send_json(handler, 200, {"tables": storage.list_tables()})
-
-    if len(parts) == 1:
-        table = parts[0]
-        return _send_json(handler, 200, storage.list_rows(table))
-
-    if len(parts) == 2:
-        table, row_id = parts
-        row = storage.get_row(table, row_id)
-        if row is None:
-            return _send_json(handler, 404, {"error": "not found"})
-        return _send_json(handler, 200, row)
-
-    if len(parts) == 3:
-        table, row_id, cell = parts
-        value = storage.get_cell(table, row_id, cell)
-        if value is None:
-            return _send_json(handler, 404, {"error": "not found"})
-        return _send_json(handler, 200, {"value": value})
-
-    _send_json(handler, 404, {"error": "not found"})
+    @staticmethod
+    def _upsert_name(session: Session, Model, name: str):
+        instance = session.exec(select(Model).where(Model.name == name)).first()
+        if instance is None:
+            instance = Model(name=name)
+            session.add(instance)
+            session.commit()
+            session.refresh(instance)
+        return instance
 
 
-def _handle_post(handler, storage: DatabaseStorage) -> None:
-    parts = _path_parts(handler.path)
-    if len(parts) != 2:
-        return _send_json(handler, 400, {"error": "expected /{table}/{row_id}"})
+# ---------------------------------------------------------------------------
+# Entrypoint
+# ---------------------------------------------------------------------------
 
-    table, row_id = parts
-    body = _read_json_body(handler)
-    storage.add_row(table, row_id, body)
-    _send_json(handler, 201, {"ok": True})
-
-
-def _handle_put(handler, storage: DatabaseStorage) -> None:
-    parts = _path_parts(handler.path)
-    body = _read_json_body(handler)
-
-    if len(parts) == 2:
-        table, row_id = parts
-        storage.update_row(table, row_id, body)
-        return _send_json(handler, 200, {"ok": True})
-
-    if len(parts) == 3:
-        table, row_id, cell = parts
-        value = body.get("value", "")
-        storage.set_cell(table, row_id, cell, value)
-        return _send_json(handler, 200, {"ok": True})
-
-    _send_json(handler, 400, {"error": "bad path"})
-
-
-def _handle_delete(handler, storage: DatabaseStorage) -> None:
-    parts = _path_parts(handler.path)
-
-    if parts == ["clear"]:
-        storage.clear()
-        return _send_json(handler, 200, {"ok": True})
-
-    if len(parts) == 2:
-        table, row_id = parts
-        storage.delete_row(table, row_id)
-        return _send_json(handler, 200, {"ok": True})
-
-    if len(parts) == 3:
-        table, row_id, cell = parts
-        storage.delete_cell(table, row_id, cell)
-        return _send_json(handler, 200, {"ok": True})
-
-    _send_json(handler, 400, {"error": "bad path"})
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Helpers
-# ──────────────────────────────────────────────────────────────────────────────
-
-def _path_parts(raw_path: str) -> list[str]:
-    path = urlparse(raw_path).path
-    return [p for p in path.split("/") if p]
-
-
-def _read_json_body(handler) -> dict:
-    length = int(handler.headers.get("Content-Length", 0))
-    if length == 0:
-        return {}
-    return json.loads(handler.rfile.read(length))
-
-
-def _send_json(handler, status: int, body: dict) -> None:
-    payload = json.dumps(body).encode()
-    handler.send_response(status)
-    handler.send_header("Content-Type", "application/json")
-    handler.send_header("Content-Length", str(len(payload)))
-    handler.end_headers()
-    handler.wfile.write(payload)
+if __name__ == "__main__":
+    DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/mydb"
+    db = DatabaseAPI(DATABASE_URL, port=4040)
+    db.run()

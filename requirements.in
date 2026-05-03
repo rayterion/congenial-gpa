@@ -7,3 +7,7 @@ factory_boy
 Faker
 pip-tools
 requests
+flask
+sqlalchemy
+sqlmodel
+psycopg2

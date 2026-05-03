@@ -22,6 +22,10 @@ import threading
 SCRIPT_DIR = Path(__file__).parent.resolve()
 COMPOSE_FILE = SCRIPT_DIR / "docker-compose.dev_db.yml"
 
+def get_db_url():
+    """ Get the database URL for connecting to the dev database. """
+    return "postgresql://devuser:devpassword@localhost:5432/devdb"
+
 def _is_docker_engine_running() -> bool:
     if shutil.which("docker") is None:
         return False
