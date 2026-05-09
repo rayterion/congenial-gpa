@@ -1,1 +1,0 @@
-""" Apps for the GPA Calculator """

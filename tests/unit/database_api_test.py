@@ -15,7 +15,8 @@ class TestDatabaseAPI(TestCase):
 
     def setUp(self):
         # Clean up the database before each test
-        self.db_api.clear_database()
+        res = requests.post(self.base_url + "/clear")
+        self.assertEqual(res.status_code, 200)
 
     def test_api_up(self):
         """ Tests that the API is up and running. """
@@ -41,7 +42,8 @@ class TestDatabaseAPI(TestCase):
         row = 0
         value = 2415
         full_url_post = self.base_url + f"/operation?action={action_post}&column={column}&row={row}&value={value}"
-        requests.post(full_url_post)
+        res = requests.post(full_url_post)
+        self.assertEqual(res.status_code, 200)
 
         # Now, get the cell value
         action_get = "get_cell"
