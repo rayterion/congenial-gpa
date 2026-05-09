@@ -23,6 +23,44 @@ class TestDatabaseAPI(TestCase):
         response = requests.get(self.base_url + "/")
         self.assertEqual(response.status_code, 200)
         self.assertIn("healthy", response.text.lower())
+    
+    def test_api_cant_up_again(self):
+        """ Tests that starting the API again raises an error. """
+        with self.assertRaises(RuntimeError):
+            self.db_api.start()
+
+    def test_invalid_action(self):
+        """ Tests that an invalid action returns a 400 error. """
+        full_url = self.base_url + "/operation?action=invalid_action"
+        response = requests.get(full_url)
+        self.assertEqual(response.status_code, 400)
+
+    def test_missing_action(self):
+        """ Tests that missing action returns a 400 error. """
+        full_url = self.base_url + "/operation"
+        response = requests.get(full_url)
+        self.assertEqual(response.status_code, 400)
+    
+    def test_missing_row(self):
+        """ Tests that missing row returns a 400 error. """
+        action = "post_cell"
+        full_url = self.base_url + f"/operation?action={action}&column=abc&value=123"
+        response = requests.post(full_url)
+        self.assertEqual(response.status_code, 400)
+
+    def test_missing_column(self):
+        """ Tests that missing column returns a 400 error. """
+        action = "post_cell"
+        full_url = self.base_url + f"/operation?action={action}&row=0&value=123"
+        response = requests.post(full_url)
+        self.assertEqual(response.status_code, 400)
+
+    def test_missing_value(self):
+        """ Tests that missing value returns a 400 error. """
+        action = "post_cell"
+        full_url = self.base_url + f"/operation?action={action}&column=abc&row=0"
+        response = requests.post(full_url)
+        self.assertEqual(response.status_code, 400)
 
     def test_post_cell(self):
         """ Tests posting a cell to the database. """

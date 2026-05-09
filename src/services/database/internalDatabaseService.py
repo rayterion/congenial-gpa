@@ -37,7 +37,7 @@ class InternalDatabaseService:
     def start(self) -> None:
         """Start the internal database API server."""
         if self._server_thread and self._server_thread.is_alive():
-            return
+            raise RuntimeError("Server is already running")
 
         self._server = make_server("localhost", self.port, self.app)
         self._server_thread = Thread(target=self._server.serve_forever, daemon=True)
@@ -75,7 +75,7 @@ class InternalDatabaseService:
         action = self._get_required_argument("action")
 
         if isinstance(action, tuple):
-            return action
+            return action # Returns an error 400
 
         return self._execute_operation(action)
 
