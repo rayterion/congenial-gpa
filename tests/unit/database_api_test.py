@@ -1,7 +1,6 @@
 from unittest import TestCase
 from services import InternalDatabaseService
 import requests
-import time
 
 class TestDatabaseAPI(TestCase):
     @classmethod
