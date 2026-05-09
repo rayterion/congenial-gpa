@@ -41,26 +41,47 @@ class TestDatabaseAPI(TestCase):
         response = requests.get(full_url)
         self.assertEqual(response.status_code, 400)
     
-    def test_missing_row(self):
+    def test_post_missing_row(self):
         """ Tests that missing row returns a 400 error. """
         action = "post_cell"
         full_url = self.base_url + f"/operation?action={action}&column=abc&value=123"
         response = requests.post(full_url)
         self.assertEqual(response.status_code, 400)
+    
+    def test_get_missing_row(self):
+        """ Tests that missing row returns a 400 error. For get cell """
+        action = "get_cell"
+        full_url = self.base_url + f"/operation?action={action}&column=abc"
+        response = requests.get(full_url)
+        self.assertEqual(response.status_code, 400)
 
-    def test_missing_column(self):
+    def test_post_missing_column(self):
         """ Tests that missing column returns a 400 error. """
         action = "post_cell"
         full_url = self.base_url + f"/operation?action={action}&row=0&value=123"
         response = requests.post(full_url)
         self.assertEqual(response.status_code, 400)
+    
+    def test_get_missing_column(self):
+        """ Tests that missing column returns a 400 error. For get cell """
+        action = "get_cell"
+        full_url = self.base_url + f"/operation?action={action}&row=0"
+        response = requests.get(full_url)
+        self.assertEqual(response.status_code, 400)
 
-    def test_missing_value(self):
+    def test_post_missing_value(self):
         """ Tests that missing value returns a 400 error. """
         action = "post_cell"
         full_url = self.base_url + f"/operation?action={action}&column=abc&row=0"
         response = requests.post(full_url)
         self.assertEqual(response.status_code, 400)
+    
+    def test_get_nonexistent_cell(self):
+        """ Tests that getting a non-existent cell returns a 404 error. """
+        action = "get_cell"
+        full_url = self.base_url + f"/operation?action={action}&column=nonexistent&row=999"
+        response = requests.get(full_url)
+        self.assertEqual(response.status_code, 404)
 
     def test_post_cell(self):
         """ Tests posting a cell to the database. """

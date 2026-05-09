@@ -134,9 +134,6 @@ class InternalDatabaseService:
 
         body = request.get_json(silent=True)
 
-        if isinstance(body, dict) and name in body:
-            return body[name]
-
         return None
 
     def _get_required_argument(self, name: str) -> Any | tuple[Response, int]:
