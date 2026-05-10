@@ -11,3 +11,4 @@ flask
 sqlalchemy
 sqlmodel
 psycopg2
+pywinauto
